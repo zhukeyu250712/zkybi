@@ -6,6 +6,11 @@
       "sourceType": "com.yupi.springbootinit.config.CosClientConfig"
     },
     {
+      "name": "spring.redis",
+      "type": "com.yupi.springbootinit.config.RedissonConfig",
+      "sourceType": "com.yupi.springbootinit.config.RedissonConfig"
+    },
+    {
       "name": "wx.open",
       "type": "com.yupi.springbootinit.config.WxOpenConfig",
       "sourceType": "com.yupi.springbootinit.config.WxOpenConfig"
@@ -45,6 +50,26 @@
       "name": "cos.client.secretKey",
       "type": "java.lang.String",
       "description": "Description for cos.client.secretKey."
+    },
+    {
+      "name": "spring.redis.database",
+      "type": "java.lang.Integer",
+      "sourceType": "com.yupi.springbootinit.config.RedissonConfig"
+    },
+    {
+      "name": "spring.redis.host",
+      "type": "java.lang.String",
+      "sourceType": "com.yupi.springbootinit.config.RedissonConfig"
+    },
+    {
+      "name": "spring.redis.password",
+      "type": "java.lang.String",
+      "sourceType": "com.yupi.springbootinit.config.RedissonConfig"
+    },
+    {
+      "name": "spring.redis.port",
+      "type": "java.lang.Integer",
+      "sourceType": "com.yupi.springbootinit.config.RedissonConfig"
     },
     {
       "name": "wx.open.app-id",
