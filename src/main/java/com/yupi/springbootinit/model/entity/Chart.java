@@ -50,6 +50,17 @@ public class Chart implements Serializable {
     private String genResult;
 
     /**
+     * 任务状态
+     * 图表状态 wait-等待,running-生成中,succeed-成功生成,failed-生成失败
+     */
+    private String status;
+
+    /**
+     * 执行信息
+     */
+    private String execMessage;
+
+    /**
      * 创建图标用户 id
      */
     private Long userId;
