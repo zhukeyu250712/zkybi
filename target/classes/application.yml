@@ -103,7 +103,6 @@ cos:
     region: xxx
     bucket: xxx
 
-
 yuapi:
   client:
     access-key: wmjig4m1pitzvnhiqfbomjx4ff672gu8

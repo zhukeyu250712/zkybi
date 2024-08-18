@@ -17,5 +17,11 @@ public interface CommonConstant {
      * 降序
      */
     String SORT_ORDER_DESC = " descend";
+
+    /**
+     * BI 模型 id
+     */
+    // 指定一个模型id(把id写死，也可以定义成一个常量)
+    long BI_MODEL_ID = 1821914479207112706L;
     
 }

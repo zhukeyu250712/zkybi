@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.google.gson.Gson;
 import com.yupi.springbootinit.annotation.AuthCheck;
+import com.yupi.springbootinit.bizmq.BiMessageProducer;
 import com.yupi.springbootinit.common.BaseResponse;
 import com.yupi.springbootinit.common.DeleteRequest;
 import com.yupi.springbootinit.common.ErrorCode;
@@ -75,7 +76,8 @@ public class ChartController {
     @Resource
     private ThreadPoolExecutor threadPoolExecutor;
 
-//    private final static Gson GSON = new Gson();
+    @Resource
+    private BiMessageProducer biMessageProducer;
 
     // region 增删改查
     /**
@@ -276,8 +278,8 @@ public class ChartController {
      * @param request
      * @return
      */
-//    @PostMapping("/gen")
-    public BaseResponse<OpenAIResponse> genChartByAi_V2(@RequestPart("file") MultipartFile multipartFile,
+    @PostMapping("/gen/openai")
+    public BaseResponse<OpenAIResponse> genChartByOpenAi(@RequestPart("file") MultipartFile multipartFile,
                                              GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
 
         String name = genChartByAiRequest.getName();
@@ -300,7 +302,6 @@ public class ChartController {
           2号,20
           3号,30
         * */
-
         // 压缩后的数据（把multipartFile传进来）
         String csvData = ExcelUtils.excelToCsv(multipartFile);
 
@@ -346,51 +347,6 @@ public class ChartController {
             }
         }
     }
-
-
-    //    /**
-//     * 智能分析  鱼皮接口 V1
-//     *
-//     * @param multipartFile
-//     * @param genChartByAiRequest
-//     * @param request
-//     * @return
-//     */
-//    @PostMapping("/gen")
-//    public BaseResponse<String> genCharByAi(@RequestPart("file") MultipartFile multipartFile,
-//                                            GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
-//        String name = genChartByAiRequest.getName();
-//        String goal = genChartByAiRequest.getGoal();
-//        String chartType = genChartByAiRequest.getChartType();
-//
-//        // 校验
-//        // 如果分析目标为空，就抛出请求参数错误异常，并给出提示
-//        ThrowUtils.throwIf(StringUtils.isBlank(goal), ErrorCode.PARAMS_ERROR, "目标为空");
-//        // 如果名称不为空，并且名称长度大于100，就抛出异常，并给出提示
-//        ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() > 100, ErrorCode.PARAMS_ERROR, "名称过长");
-//
-//        // 读取到用户上传的 excel 文件，进行一个处理
-//        User loginUser = userService.getLoginUser(request);
-//        // 文件目录：根据业务、用户来划分
-//        String uuid = RandomStringUtils.randomAlphanumeric(8);
-//        String filename = uuid + "-" + multipartFile.getOriginalFilename();
-//        File file = null;
-//        try {
-//            // 返回可访问地址
-//            return ResultUtils.success("");
-//        } catch (Exception e) {
-//            //            log.error("file upload error, filepath = " + filepath, e);
-//            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "上传失败");
-//        } finally {
-//            if (file != null) {
-//                // 删除临时文件
-//                boolean delete = file.delete();
-//                if (!delete) {
-//                    //                    log.error("file delete error, filepath = {}", filepath);
-//                }
-//            }
-//        }
-//    }
 
     /**
      * 智能分析 鱼皮接口（同步）
@@ -608,6 +564,94 @@ public class ChartController {
         // 返回到前端
         BiResponse biResponse = new BiResponse();
         biResponse.setChartId(chart.getId());
+        return ResultUtils.success(biResponse);
+    }
+
+    /**
+     * 智能分析 鱼皮接口（异步消息队列）
+     *
+     * @param multipartFile
+     * @param genChartByAiRequest
+     * @param request
+     * @return
+     */
+    @PostMapping("/gen/async/mq")
+    public BaseResponse<BiResponse> genChartByAiAsyncMq(@RequestPart("file") MultipartFile multipartFile,
+                                                      GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
+        String name = genChartByAiRequest.getName();
+        String goal = genChartByAiRequest.getGoal();
+        String chartType = genChartByAiRequest.getChartType();
+        // 通过response对象拿到用户id(必须登录才能使用)
+        User loginUser = userService.getLoginUser(request);
+
+        // 校验
+        // 如果分析目标为空，就抛出请求参数错误异常，并给出提示
+        ThrowUtils.throwIf(StringUtils.isBlank(goal), ErrorCode.PARAMS_ERROR, "目标为空");
+        // 如果名称不为空，并且名称长度大于100，就抛出异常，并给出提示
+        ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() > 100, ErrorCode.PARAMS_ERROR, "名称过长");
+        // 校验文件
+        long size = multipartFile.getSize();
+        String originalFilename = multipartFile.getOriginalFilename();
+        // 校验文件大小
+        final long ONE_MB = 1024 * 1024L;
+        ThrowUtils.throwIf(size > ONE_MB, ErrorCode.PARAMS_ERROR, "文件超过 1M");
+        // 校验文件后缀
+        String suffix = FileUtil.getSuffix(originalFilename);
+        final List<String> validFileSuffixList = Arrays.asList("xlsx","csv","xls","json");
+        ThrowUtils.throwIf(!validFileSuffixList.contains(suffix), ErrorCode.PARAMS_ERROR, "文件后缀非法");
+
+        //限流判断，每个用户一个限流器
+        redisLimiterManager.doRateLimit("genChartByAi_" + loginUser.getId());
+        /*
+        * 用户的输入(参考)
+          分析需求：
+          分析网站用户的增长情况
+          原始数据：
+          日期,用户数
+          1号,10
+          2号,20
+          3号,30
+        * */
+        // 无需Prompt，直接调用现有模型
+        // 构造用户输入
+        long biModelId = CommonConstant.BI_MODEL_ID;
+
+        // 构造用户输入
+        StringBuilder userInput = new StringBuilder();
+        userInput.append("分析需求：").append("\n");
+        // 拼接分析目标
+        String userGoal = goal;
+        // 如果图表类型不为空
+        if (StringUtils.isNotBlank(chartType)) {
+            // 就将分析目标拼接上“请使用”+图表类型
+            userGoal += "，请使用" + chartType;
+        }
+        userInput.append(userGoal).append("\n");
+        userInput.append("原始数据：").append("\n");
+
+        // 压缩后的数据（把multipartFile传进来）
+        String csvData = ExcelUtils.excelToCsv(multipartFile);
+        userInput.append(csvData).append("\n");
+
+        // 先插入数据到数据库
+        Chart chart = new Chart();
+        chart.setName(name);
+        chart.setGoal(goal);
+        chart.setChartData(csvData);
+        chart.setChartType(chartType);
+        chart.setStatus("wait");   // todo 设置枚举值
+        chart.setUserId(loginUser.getId());
+        boolean saveResult = chartService.save(chart);
+        ThrowUtils.throwIf(!saveResult, ErrorCode.SYSTEM_ERROR, "图表保存失败");
+        // todo 任务队列满了，抛个异常
+        if(threadPoolExecutor.getQueue().size()> threadPoolExecutor.getMaximumPoolSize()) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "当前队列已满");
+        }
+        long newChartId = chart.getId();
+        biMessageProducer.sendMessage(String.valueOf(newChartId));
+        // 返回到前端
+        BiResponse biResponse = new BiResponse();
+        biResponse.setChartId(newChartId);
         return ResultUtils.success(biResponse);
     }
 
