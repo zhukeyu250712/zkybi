@@ -105,8 +105,8 @@ cos:
 
 yuapi:
   client:
-    access-key: wmjig4m1pitzvnhiqfbomjx4ff672gu8
-    secret-key: vmxgv6sbhmptl2jx533xcaszvil7sk08
+    access-key: wmjig4m1pitzvnhiqfbomjx4ff672gu8zky
+    secret-key: vmxgv6sbhmptl2jx533xcaszvil7sk08zky
 
 knife4j:
   enable: true
