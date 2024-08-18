@@ -38,6 +38,12 @@ spring:
         min-idle: 1
         time-between-eviction-runs: 10s
 
+  rabbitmq:
+    host: localhost
+    port: 5672
+    password: guest
+    username: guest
+
   # Elasticsearch 配置
   # todo 需替换配置，然后取消注释
 #  elasticsearch:
